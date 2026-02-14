@@ -59,8 +59,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'vercel-token', variable: 'VERCEL_TOKEN')]) {
                     sh '''
                         bunx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-                        bunx vercel build --prod --token=$VERCEL_TOKEN
-                        bunx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+                        bunx vercel deploy --prod --token=$VERCEL_TOKEN
                     '''
                 }
             }
