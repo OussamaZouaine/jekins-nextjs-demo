@@ -11,31 +11,49 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Install dependencies') {
+
+        stage('Setup bun') {
             steps {
-                sh 'npm ci'
+                sh 'curl -fsSL https://bun.sh/install | bash'
+            }
+        }
+
+        stage('Install dependencies') {
+            environment {
+                PATH = "${env.HOME}/.bun/bin:${env.PATH}"
+            }
+            steps {
+                sh 'bun install --frozen-lockfile'
             }
         }
 
         stage('Lint') {
+            environment {
+                PATH = "${env.HOME}/.bun/bin:${env.PATH}"
+            }
             steps {
-                sh 'npm run lint'
+                sh 'bun run lint'
             }
         }
 
         stage('Build') {
+            environment {
+                PATH = "${env.HOME}/.bun/bin:${env.PATH}"
+            }
             steps {
-                sh 'npm run build'
+                sh 'bun run build'
             }
         }
 
-        // Optional: tests
         stage('Test') {
             when {
                 fileExists 'package.json'
             }
+            environment {
+                PATH = "${env.HOME}/.bun/bin:${env.PATH}"
+            }
             steps {
-                sh 'npm test -- --watch=false || true'
+                sh 'bun test || true'
             }
         }
     }
