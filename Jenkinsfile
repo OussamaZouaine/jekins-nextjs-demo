@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:20-alpine'
+            args '-u root'
+        }
+    }
 
     environment {
         NODE_ENV = 'production'
@@ -42,6 +47,12 @@ pipeline {
             }
             steps {
                 sh 'bun run build'
+            }
+        }
+
+        stage('docker build') {
+            steps {
+                sh 'docker build -t jenkins-next-demo .'
             }
         }
 
