@@ -52,6 +52,9 @@ pipeline {
         }
 
         stage('Deploy to Vercel') {
+            when {
+                branch 'main'
+            }
             environment {
                 PATH = "${env.HOME}/.bun/bin:${env.PATH}"
             }
