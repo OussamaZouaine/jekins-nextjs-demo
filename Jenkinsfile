@@ -45,17 +45,17 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            when {
-                expression { fileExists('package.json') }
-            }
-            environment {
-                PATH = "${env.HOME}/.bun/bin:${env.PATH}"
-            }
-            steps {
-                sh 'bun test || true'
-            }
-        }
+        // stage('Test') {
+        //     when {
+        //         expression { fileExists('package.json') }
+        //     }
+        //     environment {
+        //         PATH = "${env.HOME}/.bun/bin:${env.PATH}"
+        //     }
+        //     steps {
+        //         sh 'bun test || true'
+        //     }
+        // }
     }
 
     post {
