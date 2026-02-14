@@ -4,6 +4,7 @@ export default function Home() {
             <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
                 Hello from Next.js
             </h1>
+            <p>web hook added to trigger the Jenkins CI/CD pipeline</p>
         </div>
     );
 }
