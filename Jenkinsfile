@@ -47,7 +47,7 @@ pipeline {
 
         stage('Test') {
             when {
-                fileExists 'package.json'
+                expression { fileExists('package.json') }
             }
             environment {
                 PATH = "${env.HOME}/.bun/bin:${env.PATH}"
