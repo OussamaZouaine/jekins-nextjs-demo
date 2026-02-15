@@ -5,7 +5,8 @@ pipeline {
         NODE_ENV = 'production'
         PATH = "${env.HOME}/.bun/bin:${env.PATH}"
         IMAGE_NAME = 'jenkins-next-demo'
-        IMAGE_TAG = '${BRANCH_NAME}-${GIT_COMMIT}'
+        // Double quotes so Groovy expands; sanitize branch (replace / with -) for valid Docker tag
+        IMAGE_TAG = "${env.BRANCH_NAME?.replaceAll('/', '-') ?: 'unknown'}-${env.GIT_COMMIT?.take(7) ?: 'nocommit'}"
     }
 
     stages {
@@ -41,7 +42,7 @@ pipeline {
 
         stage('docker build') { // build the docker image, this is a custom step
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
+                sh "docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} ."
             }
         }
 
