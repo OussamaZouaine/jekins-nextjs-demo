@@ -1,5 +1,11 @@
-# Build stage
-FROM oven/bun:1-alpine AS builder
+# Build stage — use Node image from Docker Hub only (avoids pulling oven/bun)
+FROM node:20-alpine AS builder
+
+RUN apk add --no-cache bash curl unzip
+
+ENV BUN_INSTALL=/root/.bun
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+RUN curl -fsSL https://bun.sh/install | bash
 
 WORKDIR /app
 
