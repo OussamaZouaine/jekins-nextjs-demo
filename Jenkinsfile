@@ -47,14 +47,18 @@ pipeline {
             }
         }
 
-        // Requires: Jenkins "SonarQube Scanner" plugin and a SonarQube server entry under
-        // Manage Jenkins > Configure System > SonarQube servers (name must match the string below).
-        // Alternative without the plugin: use withCredentials for a secret text token and set
-        // SONAR_TOKEN / pass -Dsonar.host.url=... to bunx sonarqube-scanner.
+        // Jenkins: add two "Secret text" credentials (IDs below):
+        //   sonar-host-url  → e.g. https://sonarqube.example.com or https://sonarcloud.io
+        //   sonar-token     → user token from SonarQube / SonarCloud
+        // If you prefer withSonarQubeEnv('YourInstallName'), the name must match
+        // Manage Jenkins → Configure System → SonarQube servers → Name exactly.
         stage('SonarQube analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh 'bunx sonarqube-scanner'
+                withCredentials([
+                    string(credentialsId: 'sonar-host-url', variable: 'SONAR_HOST_URL'),
+                    string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')
+                ]) {
+                    sh 'bunx sonarqube-scanner -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN"'
                 }
             }
         }
