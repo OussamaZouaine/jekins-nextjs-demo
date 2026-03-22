@@ -7,6 +7,10 @@ pipeline {
         IMAGE_NAME = 'jenkins-next-demo'
         // Must match the "Name" under Manage Jenkins → Configure System → SonarQube servers
         SONARQUBE_INSTALLATION = 'sonar-qube'
+        // Optional job/folder env: if Jenkins’ SonarQube "Server URL" is localhost but the agent
+        // cannot reach it (e.g. SonarQube on host, Jenkins in Docker), set this to a reachable URL
+        // such as http://host.docker.internal:9000 or http://<host-LAN-IP>:9000 — overrides SONAR_HOST_URL for the scanner only.
+        // SONAR_HOST_URL_OVERRIDE = 'http://host.docker.internal:9000'
     }
 
     stages {
@@ -53,23 +57,34 @@ pipeline {
         // Set SONARQUBE_INSTALLATION above to the exact SonarQube server "Name" in Jenkins.
         // If the build runs in Docker, do not use http://localhost:9000 in Jenkins’ SonarQube URL —
         // use a host/service IP or host.docker.internal so the agent can reach SonarQube.
+        // If Jenkins already has localhost saved, set job env SONAR_HOST_URL_OVERRIDE (see environment {} above).
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv("${env.SONARQUBE_INSTALLATION}") {
                     // npm sonarqube-scanner defaults to http://127.0.0.1:9000 unless properties are set.
-                    // Pass URL/token explicitly so Jenkins-injected SONAR_* vars are always used.
+                    // Pass URL/token explicitly. SONAR_HOST_URL_OVERRIDE wins over Jenkins’ SONAR_HOST_URL.
                     sh '''
                         set -e
                         if [ -z "${SONAR_HOST_URL:-}" ]; then
-                          echo "ERROR: SONAR_HOST_URL is empty. In Jenkins: Manage Jenkins → Configure System → SonarQube servers, set Server URL to an address this agent can reach (not localhost if SonarQube runs elsewhere or Jenkins is in Docker)."
+                          echo "ERROR: SONAR_HOST_URL is empty. In Jenkins: Manage Jenkins → Configure System → SonarQube servers, set Server URL to an address this agent can reach."
                           exit 1
                         fi
+                        EFFECTIVE_URL="${SONAR_HOST_URL_OVERRIDE:-$SONAR_HOST_URL}"
+                        if [ -n "${SONAR_HOST_URL_OVERRIDE:-}" ]; then
+                          echo "SonarQube: using SONAR_HOST_URL_OVERRIDE (agent cannot use Jenkins global URL as-is)"
+                        fi
+                        echo "SonarQube: server URL for scanner: ${EFFECTIVE_URL}"
+                        case "$EFFECTIVE_URL" in
+                          *127.0.0.1*|*localhost*)
+                            echo "NOTE: URL is localhost. If the scan fails with ECONNREFUSED, SonarQube is not on this agent — fix Jenkins SonarQube Server URL or set SONAR_HOST_URL_OVERRIDE (e.g. http://host.docker.internal:9000 on Docker Desktop)."
+                            ;;
+                        esac
                         if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
                           bunx sonarqube-scanner \
-                            -Dsonar.host.url="$SONAR_HOST_URL" \
+                            -Dsonar.host.url="$EFFECTIVE_URL" \
                             -Dsonar.token="$SONAR_AUTH_TOKEN"
                         else
-                          bunx sonarqube-scanner -Dsonar.host.url="$SONAR_HOST_URL"
+                          bunx sonarqube-scanner -Dsonar.host.url="$EFFECTIVE_URL"
                         fi
                     '''
                 }
