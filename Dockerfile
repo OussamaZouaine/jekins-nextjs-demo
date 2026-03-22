@@ -1,5 +1,6 @@
-# Build stage — use Node image from Docker Hub only (avoids pulling oven/bun)
-FROM node:20-alpine AS builder
+# Build stage — official Node image via AWS Public ECR mirror (same as library/node on Docker Hub).
+# Use this when the CI Docker daemon cannot authenticate to auth.docker.io (401 on Hub pulls).
+FROM public.ecr.aws/docker/library/node:20-alpine AS builder
 
 RUN apk add --no-cache bash curl unzip
 
@@ -17,7 +18,7 @@ RUN mkdir -p public
 RUN bun run build
 
 # Runner stage - Next.js standalone uses Node.js
-FROM node:20-alpine AS runner
+FROM public.ecr.aws/docker/library/node:20-alpine AS runner
 
 WORKDIR /app
 
