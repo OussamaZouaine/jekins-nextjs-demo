@@ -47,6 +47,18 @@ pipeline {
             }
         }
 
+        // Requires: Jenkins "SonarQube Scanner" plugin and a SonarQube server entry under
+        // Manage Jenkins > Configure System > SonarQube servers (name must match the string below).
+        // Alternative without the plugin: use withCredentials for a secret text token and set
+        // SONAR_TOKEN / pass -Dsonar.host.url=... to bunx sonarqube-scanner.
+        stage('SonarQube analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'bunx sonarqube-scanner'
+                }
+            }
+        }
+
         stage('Build') { // build the code, this is a custom step
             steps {
                 echo "Building the code..."
