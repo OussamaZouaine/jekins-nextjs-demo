@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Jenkins Next Demo",
-    description: "Next.js app wired to Jenkins CI/CD via webhook",
+    title: "Tasks · Jenkins Next Demo",
+    description: "Todo list app — ready to connect to your API",
 };
 
 export default function RootLayout({
