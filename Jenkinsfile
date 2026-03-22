@@ -5,6 +5,8 @@ pipeline {
         NODE_ENV = 'production'
         PATH = "${env.HOME}/.bun/bin:${env.PATH}"
         IMAGE_NAME = 'jenkins-next-demo'
+        // Must match the "Name" under Manage Jenkins → Configure System → SonarQube servers
+        SONARQUBE_INSTALLATION = 'sonar-qube'
     }
 
     stages {
@@ -47,18 +49,12 @@ pipeline {
             }
         }
 
-        // Jenkins: add two "Secret text" credentials (IDs below):
-        //   sonar-host-url  → e.g. https://sonarqube.example.com or https://sonarcloud.io
-        //   sonar-token     → user token from SonarQube / SonarCloud
-        // If you prefer withSonarQubeEnv('YourInstallName'), the name must match
-        // Manage Jenkins → Configure System → SonarQube servers → Name exactly.
+        // SonarQube Scanner plugin: server URL + token come from Jenkins (not repo credentials).
+        // Set SONARQUBE_INSTALLATION above to the exact SonarQube server "Name" in Jenkins.
         stage('SonarQube analysis') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'sonar-host-url', variable: 'SONAR_HOST_URL'),
-                    string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')
-                ]) {
-                    sh 'bunx sonarqube-scanner -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN"'
+                withSonarQubeEnv("${env.SONARQUBE_INSTALLATION}") {
+                    sh 'bunx sonarqube-scanner'
                 }
             }
         }
