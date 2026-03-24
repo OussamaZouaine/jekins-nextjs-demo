@@ -5,7 +5,6 @@ pipeline {
         NODE_ENV = 'production'
         PATH = "${env.HOME}/.bun/bin:${env.PATH}"
         IMAGE_NAME = 'jenkins-next-demo'
-        // Must match the "Name" under Manage Jenkins → Configure System → SonarQube servers
         SONARQUBE_INSTALLATION = 'sonar-qube'
     }
 
@@ -49,15 +48,10 @@ pipeline {
             }
         }
 
-        // SonarQube Scanner plugin: server URL + token come from Jenkins (not repo credentials).
-        // Set SONARQUBE_INSTALLATION above to the exact SonarQube server "Name" in Jenkins.
-        // If the build runs in Docker, do not use http://localhost:9000 in Jenkins’ SonarQube URL —
-        // use a host/service IP or host.docker.internal so the agent can reach SonarQube.
+        
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv("${env.SONARQUBE_INSTALLATION}") {
-                    // npm sonarqube-scanner defaults to http://127.0.0.1:9000 unless properties are set.
-                    // Pass URL/token explicitly so Jenkins-injected SONAR_* vars are always used.
                     sh '''
                         set -e
                         if [ -z "${SONAR_HOST_URL:-}" ]; then
