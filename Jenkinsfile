@@ -129,9 +129,23 @@ pipeline {
     post {
         success {
             echo '✅ Build successful'
+            slackSend(
+                color: 'good',
+                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} succeeded\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'} • Image: `${env.IMAGE_NAME}:${env.IMAGE_TAG ?: 'n/a'}`"
+            )
         }
         failure {
             echo '❌ Build failed'
+            slackSend(
+                color: 'danger',
+                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} failed\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'}"
+            )
+        }
+        unstable {
+            slackSend(
+                color: 'warning',
+                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} is unstable\n<${env.BUILD_URL}|Open build>"
+            )
         }
     }
 }
