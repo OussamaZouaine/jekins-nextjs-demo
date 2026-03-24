@@ -94,6 +94,19 @@ pipeline {
                     sh "docker tag ${env.IMAGE_NAME}:${env.IMAGE_TAG} docker.io/\$DOCKER_USERNAME/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
                     echo "Pushing the docker image to Docker Hub..."
                     sh "docker push docker.io/\$DOCKER_USERNAME/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                    script {
+                        // `latest` points at the newest image only for the default branch; other branches keep unique tags only.
+                        def isLatestBranch = (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master')
+                        if (isLatestBranch) {
+                            echo "Tagging and pushing :latest (default branch only)..."
+                            sh """
+                                docker tag ${env.IMAGE_NAME}:${env.IMAGE_TAG} docker.io/\$DOCKER_USERNAME/${env.IMAGE_NAME}:latest
+                                docker push docker.io/\$DOCKER_USERNAME/${env.IMAGE_NAME}:latest
+                            """
+                        } else {
+                            echo "Skipping :latest (not main/master); image is ${env.IMAGE_NAME}:${env.IMAGE_TAG} only."
+                        }
+                    }
                 }
             }
         }
@@ -127,24 +140,28 @@ pipeline {
     }
 
     post {
+        always {
+            echo '🧹 cleaning up the workspace...'
+            deleteDir()
+        }
         success {
             echo '✅ Build successful'
             slackSend(
                 color: 'good',
-                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} succeeded\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'} • Image: `${env.IMAGE_NAME}:${env.IMAGE_TAG ?: 'n/a'}`"
+                message: "✅ *${env.JOB_NAME}* #${env.BUILD_NUMBER} succeeded\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'} • Image: `${env.IMAGE_NAME}:${env.IMAGE_TAG ?: 'n/a'}`"
             )
         }
         failure {
             echo '❌ Build failed'
             slackSend(
                 color: 'danger',
-                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} failed\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'}"
+                message: "❌ *${env.JOB_NAME}* #${env.BUILD_NUMBER} failed\n<${env.BUILD_URL}|Open build> • Branch: ${env.BRANCH_NAME ?: 'N/A'}"
             )
         }
         unstable {
             slackSend(
                 color: 'warning',
-                message: "*${env.JOB_NAME}* #${env.BUILD_NUMBER} is unstable\n<${env.BUILD_URL}|Open build>"
+                message: "⚠️ *${env.JOB_NAME}* #${env.BUILD_NUMBER} is unstable\n<${env.BUILD_URL}|Open build>"
             )
         }
     }
