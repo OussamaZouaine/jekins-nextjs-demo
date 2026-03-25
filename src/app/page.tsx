@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Todo = {
     id: string;
@@ -9,19 +9,60 @@ type Todo = {
     createdAt: number;
 };
 
+type ApiTodo = {
+    id: string;
+    title: string;
+    completed: boolean;
+    createdAt: number;
+};
+
 type Filter = "all" | "active" | "done";
 
-function createId(): string {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+function mapApiTodo(t: ApiTodo): Todo {
+    return {
+        id: t.id,
+        title: t.title,
+        done: t.completed,
+        createdAt: t.createdAt,
+    };
 }
 
 export default function Home() {
     const [todos, setTodos] = useState<Todo[]>([]);
     const [draft, setDraft] = useState("");
     const [filter, setFilter] = useState<Filter>("all");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadTodos = useCallback(async () => {
+        setError(null);
+        const r = await fetch("/api/todos", { cache: "no-store" });
+        if (!r.ok) {
+            const text = await r.text();
+            throw new Error(text || `Failed to load (${r.status})`);
+        }
+        const data = (await r.json()) as ApiTodo[];
+        setTodos(data.map(mapApiTodo));
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        loadTodos()
+            .catch((e: unknown) => {
+                if (!cancelled) {
+                    setError(
+                        e instanceof Error ? e.message : "Failed to load tasks",
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [loadTodos]);
 
     const filtered = useMemo(() => {
         if (filter === "active") return todos.filter((t) => !t.done);
@@ -35,34 +76,100 @@ export default function Home() {
         return { total, done, active: total - done };
     }, [todos]);
 
-    const addTodo = useCallback(() => {
+    const addTodo = useCallback(async () => {
         const title = draft.trim();
         if (!title) return;
-        setTodos((prev) => [
-            {
-                id: createId(),
-                title,
-                done: false,
-                createdAt: Date.now(),
-            },
-            ...prev,
-        ]);
-        setDraft("");
+        setError(null);
+        try {
+            const r = await fetch("/api/todos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title }),
+            });
+            if (!r.ok) {
+                const j = await r.json().catch(() => null);
+                throw new Error(
+                    (j && typeof j === "object" && "error" in j
+                        ? String((j as { error: unknown }).error)
+                        : null) || `Add failed (${r.status})`,
+                );
+            }
+            const created = mapApiTodo((await r.json()) as ApiTodo);
+            setTodos((prev) => [created, ...prev]);
+            setDraft("");
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Add failed");
+        }
     }, [draft]);
 
-    const toggleTodo = useCallback((id: string) => {
-        setTodos((prev) =>
-            prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
-        );
+    const toggleTodo = useCallback(
+        async (id: string) => {
+            const todo = todos.find((t) => t.id === id);
+            if (!todo) return;
+            const nextDone = !todo.done;
+            setError(null);
+            try {
+                const r = await fetch(`/api/todos/${encodeURIComponent(id)}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ completed: nextDone }),
+                });
+                if (!r.ok) {
+                    throw new Error(`Update failed (${r.status})`);
+                }
+                const updated = mapApiTodo((await r.json()) as ApiTodo);
+                setTodos((prev) =>
+                    prev.map((t) => (t.id === id ? updated : t)),
+                );
+            } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : "Update failed");
+            }
+        },
+        [todos],
+    );
+
+    const removeTodo = useCallback(async (id: string) => {
+        setError(null);
+        try {
+            const r = await fetch(`/api/todos/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+            });
+            if (!r.ok && r.status !== 204) {
+                throw new Error(`Remove failed (${r.status})`);
+            }
+            setTodos((prev) => prev.filter((t) => t.id !== id));
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Remove failed");
+        }
     }, []);
 
-    const removeTodo = useCallback((id: string) => {
-        setTodos((prev) => prev.filter((t) => t.id !== id));
-    }, []);
+    const clearCompleted = useCallback(async () => {
+        const done = todos.filter((t) => t.done);
+        setError(null);
+        try {
+            await Promise.all(
+                done.map((t) =>
+                    fetch(`/api/todos/${encodeURIComponent(t.id)}`, {
+                        method: "DELETE",
+                    }).then((r) => {
+                        if (!r.ok && r.status !== 204) {
+                            throw new Error(`Clear failed (${r.status})`);
+                        }
+                    }),
+                ),
+            );
+            setTodos((prev) => prev.filter((t) => !t.done));
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Clear failed");
+            await loadTodos();
+        }
+    }, [todos, loadTodos]);
 
-    const clearCompleted = useCallback(() => {
-        setTodos((prev) => prev.filter((t) => !t.done));
-    }, []);
+    const statusLabel = loading
+        ? "Loading…"
+        : error
+          ? "Error"
+          : "Connected · API";
 
     return (
         <div className="relative min-h-screen overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
@@ -83,10 +190,16 @@ export default function Home() {
                 <header className="mb-8 text-center sm:mb-10">
                     <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/70 px-3 py-1 text-xs font-medium tracking-wide text-zinc-600 shadow-sm backdrop-blur-sm dark:border-zinc-700/80 dark:bg-zinc-900/70 dark:text-zinc-400">
                         <span
-                            className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgb(16_185_129/0.8)]"
+                            className={`size-1.5 rounded-full shadow-[0_0_8px_rgb(16_185_129/0.8)] ${
+                                error
+                                    ? "bg-red-500"
+                                    : loading
+                                      ? "bg-amber-400"
+                                      : "bg-emerald-500"
+                            }`}
                             aria-hidden
                         />
-                        Local · API ready to wire
+                        {statusLabel}
                     </p>
                     <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                         <span className="bg-linear-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-teal-400 dark:to-cyan-400">
@@ -94,9 +207,17 @@ export default function Home() {
                         </span>
                     </h1>
                     <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        Capture what matters. Hook up your endpoint when you are
-                        ready—state lives here for now.
+                        Synced with the Elysia API. Add, complete, or remove
+                        tasks—state lives in Postgres.
                     </p>
+                    {error ? (
+                        <p
+                            className="mx-auto mt-3 max-w-sm rounded-lg border border-red-200/80 bg-red-50/90 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-200"
+                            role="alert"
+                        >
+                            {error}
+                        </p>
+                    ) : null}
                 </header>
 
                 <main className="flex flex-1 flex-col">
@@ -105,7 +226,7 @@ export default function Home() {
                             className="flex gap-2 p-2"
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                addTodo();
+                                void addTodo();
                             }}
                         >
                             <label htmlFor="new-todo" className="sr-only">
@@ -119,10 +240,12 @@ export default function Home() {
                                 placeholder="What needs doing?"
                                 className="min-w-0 flex-1 rounded-xl border border-transparent bg-zinc-50/90 px-4 py-3 text-[15px] text-zinc-900 placeholder:text-zinc-400 outline-none ring-0 transition focus:border-teal-500/40 focus:bg-white focus:ring-2 focus:ring-teal-500/20 dark:bg-zinc-950/80 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950"
                                 autoComplete="off"
+                                disabled={loading}
                             />
                             <button
                                 type="submit"
-                                className="shrink-0 rounded-xl bg-linear-to-br from-teal-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-teal-900/20 transition hover:brightness-110 active:scale-[0.98] dark:from-teal-500 dark:to-cyan-500 dark:shadow-teal-950/30"
+                                disabled={loading}
+                                className="shrink-0 rounded-xl bg-linear-to-br from-teal-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-teal-900/20 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50 dark:from-teal-500 dark:to-cyan-500 dark:shadow-teal-950/30"
                             >
                                 Add
                             </button>
@@ -191,7 +314,7 @@ export default function Home() {
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    toggleTodo(todo.id)
+                                                    void toggleTodo(todo.id)
                                                 }
                                                 className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
                                                     todo.done
@@ -235,7 +358,9 @@ export default function Home() {
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => removeTodo(todo.id)}
+                                            onClick={() =>
+                                                void removeTodo(todo.id)
+                                            }
                                             className="shrink-0 rounded-r-xl px-3 text-zinc-400 opacity-0 transition hover:bg-red-500/10 hover:text-red-600 group-hover:opacity-100 dark:hover:text-red-400"
                                             aria-label={`Remove ${todo.title}`}
                                         >
@@ -265,7 +390,7 @@ export default function Home() {
                         <div className="mt-4 flex justify-center">
                             <button
                                 type="button"
-                                onClick={clearCompleted}
+                                onClick={() => void clearCompleted()}
                                 className="text-xs font-medium text-zinc-500 underline-offset-4 transition hover:text-teal-700 hover:underline dark:hover:text-teal-400"
                             >
                                 Clear completed ({stats.done})
@@ -276,7 +401,7 @@ export default function Home() {
 
                 <footer className="mt-10 text-center">
                     <p className="text-xs text-zinc-500 dark:text-zinc-500">
-                        Jenkins Next demo · swap in your API when ready
+                        Next.js → /api/todos → Elysia · Jenkins Next demo
                     </p>
                 </footer>
             </div>

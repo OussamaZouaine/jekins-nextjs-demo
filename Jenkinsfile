@@ -6,6 +6,7 @@ pipeline {
         PATH = "${env.HOME}/.bun/bin:${env.PATH}"
         IMAGE_NAME = 'jenkins-next-demo'
         SONARQUBE_INSTALLATION = 'sonar-qube'
+        BACKEND_URL = 'http://backend:3010'
     }
 
     stages {
